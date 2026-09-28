@@ -578,8 +578,12 @@ const DETAIL = {
     winH: 1.7, sill: 0.9, // 窗高、窗台高
     penthouse: 3.0,   // 屋突（樓梯間／機房）高
     focusFloor: 5,    // 事務所所在樓層
+    role: 'office',
   },
 };
+// 國聚之境（3 棟，使用者提供 15F）；以下樓高、開窗皆為假設值
+const GUOJU = { name: '國聚之境', floors: 15, h1: 4.2, hTyp: 3.2, parapet: 1.2, bay: 3.4, winRatio: 0.55, winH: 1.5, sill: 0.9, penthouse: 3.0, focusFloor: null, role: 'landmark', group: 'guoju' };
+for (const id of [1191332091, 1191332092, 1191332093]) DETAIL[id] = GUOJU;
 
 function parseBuildings(j) {
   const out = [];
@@ -593,7 +597,7 @@ function parseBuildings(j) {
     const D = DETAIL[el.id];
     if (D) {
       const h = D.h1 + D.hTyp * (D.floors - 1);
-      out.push({ id: el.id, ring, h, src: `使用者提供 ${D.floors} 層（樓高為假設值）`, est: false, tags: { ...t, name: D.name, building: 'office' }, detail: D });
+      out.push({ id: el.id, ring, h, src: `使用者提供 ${D.floors} 層（樓高為假設值）`, est: false, tags: { ...t, name: D.name, building: D.role === 'office' ? 'office' : (t.building || 'apartments') }, detail: D });
       continue;
     }
     const [h, src] = estimateHeight(t, el.id);
@@ -693,10 +697,12 @@ function buildDetails() {
   const buckets = new Map(); // material → [matrix]
   const add = (mat, cx, cy, cz, sx, sy, sz, ry) => {
     const m4 = new THREE.Matrix4().compose(new THREE.Vector3(cx, cy, cz), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), ry), new THREE.Vector3(sx, sy, sz));
-    if (!buckets.has(mat)) buckets.set(mat, []);
-    buckets.get(mat).push(m4);
+    if (!buckets.has(mat)) buckets.set(mat, { m: [], own: [] });
+    const bk = buckets.get(mat); bk.m.push(m4); bk.own.push(curB);
   };
+  let curB = null;
   for (const b of list) {
+    curB = b;
     const D = b.detail;
     let ring = b.ring; if (ringArea(ring) < 0) ring = ring.slice().reverse();
     const g0 = b.base * S.ex;              // 室外地坪
@@ -708,10 +714,10 @@ function buildDetails() {
       g.rotateX(-Math.PI / 2); g.translate(0, y0, 0);
       const m = new THREE.Mesh(g, mat); m.userData.building = b; detailGroup.add(m); return m;
     };
-    const FF = D.focusFloor;
+    const FF = D.focusFloor || 0;
     const y5b = g0 + D.h1 + D.hTyp * (FF - 2), y5t = y5b + D.hTyp;
     b.y5b = y5b; b.y5t = y5t;
-    if (!focus) extrude(g0 - 1.5, top, matWall);
+    if (!focus || !FF) extrude(g0 - 1.5, top, matWall);
     else {
       extrude(g0 - 1.5, y5b, matWall);
       extrude(y5t, top, matWall);
@@ -739,7 +745,7 @@ function buildDetails() {
       // 樓板線
       for (let f = 1; f < D.floors; f++) {
         const y = g0 + D.h1 + D.hTyp * (f - 1);
-        const is5 = (f === D.focusFloor - 1 || f === D.focusFloor);
+        const is5 = !!D.focusFloor && (f === D.focusFloor - 1 || f === D.focusFloor);
         add(is5 && !focus ? matAccent : matSlab, mx + nx * 0.12, y, mz + nz * 0.12, L, is5 ? 0.34 : 0.28, is5 ? 0.3 : 0.24, ry);
       }
       // 1F 店面玻璃與雨遮
@@ -758,7 +764,7 @@ function buildDetails() {
         for (let k = 0; k < nb; k++) {
           const t = (k + 0.5) / nb - 0.5;
           const cx = mx + (dx / L) * t * L, cz = mz + (dz / L) * t * L;
-          add(f === D.focusFloor - 1 ? matGlass5 : matGlass, cx + nx * 0.03, yc, cz + nz * 0.03, ww, D.winH, 0.05, ry);
+          add(D.focusFloor && f === D.focusFloor - 1 ? matGlass5 : matGlass, cx + nx * 0.03, yc, cz + nz * 0.03, ww, D.winH, 0.05, ry);
           add(matFrame, cx + nx * 0.07, yb + D.sill - 0.04, cz + nz * 0.07, ww + 0.16, 0.08, 0.14, ry); // 窗台
         }
       }
@@ -776,12 +782,13 @@ function buildDetails() {
     add(matFrame, cxm - dx * 6, top + 0.5, czm - dz * 6, 3.2, 1.0, 1.4, ry);      // 空調主機（示意）
     // 屋頂標記（強調色，僅一處）
   }
-  for (const [mat, arr] of buckets) {
+  for (const [mat, bk] of buckets) {
+    const arr = bk.m;
     const im = new THREE.InstancedMesh(box, mat, arr.length);
     arr.forEach((m4, i) => im.setMatrixAt(i, m4));
     im.instanceMatrix.needsUpdate = true;
     im.computeBoundingSphere();
-    im.userData.building = list[0];
+    im.userData.owners = bk.own;
     detailGroup.add(im);
   }
   detailGroup.traverse((o) => { if (o.isMesh) { o.castShadow = real; o.receiveShadow = real; } });
@@ -820,7 +827,7 @@ function buildLabels() {
 }
 
 /* ---------- 點選地點縮放 ---------- */
-const FOCUS_RANGE = { office: 0, station: 650, temple: 220, gov: 300, sport: 420, park: 420, peak: 1100, river: 1600, village: 800 }; // 視距（m）
+const FOCUS_RANGE = { office: 0, bldg: 280, station: 650, temple: 220, gov: 300, sport: 420, park: 420, peak: 1100, river: 1600, village: 800 }; // 視距（m）
 const FOCUS_PITCH = { peak: 32, river: 48 }; // 俯角（度），未列者 42°
 function focusLandmark(l) {
   if (!S.hf) return;
@@ -837,13 +844,13 @@ function focusLandmark(l) {
   flyTo(T, pos, 1500);
   const sel = document.querySelector('#place'); if (sel) sel.value = '';
 }
-const KIND_ZH = { office: '事務所', station: '車站', temple: '廟宇', gov: '機關', sport: '運動設施', park: '公園', peak: '山頭', river: '河川' };
+const KIND_ZH = { office: '事務所', bldg: '建築', station: '車站', temple: '廟宇', gov: '機關', sport: '運動設施', park: '公園', peak: '山頭', river: '河川' };
 function fillPlaceList() {
   const sel = document.querySelector('#place');
   if (!sel) return;
   const items = S.landmarks.filter((l) => l.kind !== 'village');
   if (!items.length) return;
-  const order = ['office', 'station', 'gov', 'temple', 'park', 'sport', 'peak', 'river'];
+  const order = ['office', 'bldg', 'station', 'gov', 'temple', 'park', 'sport', 'peak', 'river'];
   let html = '<option value="">前往地點……</option>';
   for (const k of order) {
     const g = items.filter((l) => l.kind === k);
@@ -925,7 +932,7 @@ canvas.addEventListener('pointerup', (e) => {
   const hits = ray.intersectObject(bldgMesh, false);
   const dh = detailGroup ? ray.intersectObject(detailGroup, true) : [];
   let b = null;
-  if (dh.length && (!hits.length || dh[0].distance <= hits[0].distance)) { b = dh[0].object.userData.building; clearHighlight(); }
+  if (dh.length && (!hits.length || dh[0].distance <= hits[0].distance)) { const o = dh[0].object; b = o.userData.owners ? o.userData.owners[dh[0].instanceId] : o.userData.building; clearHighlight(); }
   else if (hits.length) { b = S.buildings[bldgMesh.userData.triOwner[hits[0].faceIndex]]; if (b) highlight(b); }
   if (!b) { clearHighlight(); info.hidden = true; return; }
   const t = b.tags;
@@ -939,7 +946,7 @@ canvas.addEventListener('pointerup', (e) => {
       <tr><th>來源 Source</th><td>${b.src}</td></tr>
       <tr><th>投影面積 Footprint</th><td class="mono">${area.toFixed(0)} m²</td></tr>
       <tr><th>基地高程 Base</th><td class="mono">${(b.y0 / S.ex + 1.5).toFixed(1)} m</td></tr>
-      ${b.detail ? `<tr><th>事務所樓層</th><td>${b.detail.focusFloor}F（樓板 +${(b.y5b - b.base * S.ex).toFixed(1)} m，假設）</td></tr>` : ''}
+      ${b.detail && b.detail.focusFloor ? `<tr><th>事務所樓層</th><td>${b.detail.focusFloor}F（樓板 +${(b.y5b - b.base * S.ex).toFixed(1)} m，假設）</td></tr>` : ''}
       <tr><th>OSM</th><td class="mono">way/${b.id}</td></tr>
     </table>`;
 });
@@ -977,7 +984,7 @@ function preset(name) {
     const T = new THREE.Vector3(cxm, gy(cxm, minZ + span * 0.1), minZ + span * 0.12);
     flyTo(T, new THREE.Vector3(cxm - span * 0.1, T.y + span * 0.28, czm + span * 0.25));
   } else if (name === 'office') {
-    const b = S.buildings.find((x) => x.detail);
+    const b = S.buildings.find((x) => x.detail && x.detail.role === 'office');
     if (!b) return;
     let cx0 = 0, cz0 = 0; b.ring.forEach(([x, z]) => { cx0 += x; cz0 += z; }); cx0 /= b.ring.length; cz0 /= b.ring.length;
     const T = new THREE.Vector3(cx0, b.base * S.ex + b.h * 0.45, cz0);
@@ -1257,9 +1264,16 @@ async function main() {
     log(`地標：${S.landmarks.length} 處，河川標籤 ${Object.keys(rivers).length} 條`);
 
     S.buildings = parseBuildings(PK.buildings);
+    const grp = new Map(); // 同名細化建物合併一個標籤（取群組形心）
     for (const b of S.buildings) if (b.detail) {
-      let cx0 = 0, cz0 = 0; b.ring.forEach(([x, z]) => { cx0 += x; cz0 += z; });
-      S.landmarks.push({ name: b.detail.name, kind: 'office', pri: 0, x: cx0 / b.ring.length, z: cz0 / b.ring.length, lift: b.h + b.detail.penthouse + 6 });
+      const k = b.detail.name;
+      if (!grp.has(k)) grp.set(k, { D: b.detail, h: b.h, xs: 0, zs: 0, n: 0 });
+      const g = grp.get(k);
+      b.ring.forEach(([x, z]) => { g.xs += x; g.zs += z; g.n++; });
+    }
+    for (const [name, g] of grp) {
+      const office = g.D.role === 'office';
+      S.landmarks.push({ name, kind: office ? 'office' : 'bldg', pri: office ? 0 : 3, x: g.xs / g.n, z: g.zs / g.n, lift: g.h + g.D.penthouse + 6 });
     }
     buildLabels();
     buildBuildings();
@@ -1287,7 +1301,7 @@ function setFocus5(on) {
   document.querySelectorAll('[data-focus5]').forEach((x) => x.classList.toggle('on', on));
   buildDetails();
   if (bldgMesh) { bldgMesh.material.transparent = on; bldgMesh.material.opacity = on ? 0.35 : 1; bldgMesh.material.depthWrite = !on; bldgMesh.material.needsUpdate = true; }
-  const lm = S.landmarks.find((l) => l.kind === 'office'); const b = S.buildings.find((x) => x.detail);
+  const lm = S.landmarks.find((l) => l.kind === 'office'); const b = S.buildings.find((x) => x.detail && x.detail.role === 'office');
   if (lm && b) { lm.lift = on ? (b.y5t - b.base * S.ex) + 4 : b.h + b.detail.penthouse + 6; lm.name = on ? `${b.detail.name} · ${b.detail.focusFloor}F` : b.detail.name; buildLabels(); }
   if (on) preset('office');
 }
