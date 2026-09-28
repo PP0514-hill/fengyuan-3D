@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>豐原區 3D 地形模型</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+TC:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --pp-bg-page:#ECEAE5; --pp-bg-card:#FFFFFF; --pp-bg-card-sub:#F3F1EC;
+  --pp-ink:#232220; --pp-ink-sub:#6E6B64; --pp-ink-hint:#9A968D;
+  --pp-line:#D8D5CE; --pp-line-strong:#C3BFB6;
+  --pp-accent:#9C3D2C; --pp-accent-deep:#843022; --pp-accent-soft:#F2E3DE;
+  --pp-state-review:#B07D24;
+  --pp-font-zh:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
+  --pp-font-en:"Inter","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --pp-font-mono:"JetBrains Mono","SFMono-Regular",Consolas,monospace;
+  --pp-font-base:var(--pp-font-en),var(--pp-font-zh);
+  --pp-radius-card:12px; --pp-radius-control:8px;
+}
+* { box-sizing:border-box; }
+html,body { margin:0; height:100%; background:var(--pp-bg-page); color:var(--pp-ink); font:400 15px/1.7 var(--pp-font-base); overflow:hidden; }
+#c { position:fixed; inset:0; width:100%; height:100%; display:block; outline:none; }
+#labels { position:fixed; inset:0; pointer-events:none; overflow:hidden; }
+.lbl { pointer-events:auto; cursor:pointer; position:absolute; left:0; top:0; display:none; align-items:center; gap:6px; white-space:nowrap; font-size:12px; line-height:1; color:var(--pp-ink); margin:-5px 0 0 -5px; }
+.lbl .dot { width:9px; height:9px; border-radius:50%; background:var(--pp-bg-card); border:1.5px solid var(--pp-ink); flex:none; }
+.lbl .tx { background:rgba(255,255,255,.86); padding:4px 7px; border-radius:6px; border:.5px solid var(--pp-line-strong); font-weight:500; }
+.lbl em { font-style:normal; font-family:var(--pp-font-mono); color:var(--pp-ink-sub); font-weight:400; font-size:11px; }
+.lbl:hover .tx { border-color:var(--pp-ink); background:#fff; }
+.lbl.k-station .dot { background:var(--pp-ink); }
+.lbl.k-office .dot { background:var(--pp-accent); border-color:var(--pp-accent); }
+.lbl.k-office .tx { border-color:var(--pp-accent); color:var(--pp-accent-deep); }
+.lbl.k-peak .dot { border-radius:0; transform:rotate(45deg); width:8px; height:8px; }
+.lbl.k-river .dot { display:none; }
+.lbl.k-river .tx { background:none; border:none; color:#4E6268; font-weight:400; letter-spacing:.3em; }
+.lbl.k-village .dot { display:none; }
+.lbl.k-village .tx { background:none; border:none; color:var(--pp-ink-sub); font-weight:400; font-size:11px; }
+
+.panel { position:fixed; top:16px; left:16px; width:300px; max-height:calc(100% - 76px); overflow:auto; background:var(--pp-bg-card); border:.5px solid var(--pp-line-strong); border-radius:var(--pp-radius-card); padding:20px; }
+body.panel-off .panel { display:none; }
+.panel h1 { font-size:20px; font-weight:500; line-height:1.35; margin:0; }
+.panel .sub { font-size:13px; color:var(--pp-ink-sub); margin:2px 0 0; }
+.sec { border-top:.5px solid var(--pp-line); margin-top:16px; padding-top:14px; }
+.sec h2 { font-size:13px; font-weight:500; color:var(--pp-ink-sub); margin:0 0 8px; letter-spacing:.04em; }
+.stats { display:grid; grid-template-columns:1fr 1fr; gap:10px 12px; }
+.stat .k { font-size:12px; color:var(--pp-ink-sub); line-height:1.4; }
+.stat .v { font-family:var(--pp-font-mono); font-size:13px; font-weight:500; }
+.layers { display:grid; grid-template-columns:1fr 1fr; gap:4px 10px; font-size:14px; }
+.layers label { display:flex; align-items:center; gap:7px; cursor:pointer; }
+input[type=checkbox] { accent-color:var(--pp-ink); width:14px; height:14px; margin:0; }
+.row { display:flex; gap:6px; flex-wrap:wrap; }
+button { font:inherit; font-size:13px; color:var(--pp-ink); background:var(--pp-bg-card-sub); border:.5px solid var(--pp-line-strong); border-radius:var(--pp-radius-control); padding:5px 10px; cursor:pointer; }
+button:hover { background:#E9E6DF; }
+button.on { background:var(--pp-ink); color:#fff; border-color:var(--pp-ink); }
+.slider { display:flex; align-items:center; gap:10px; }
+.slider input { flex:1; accent-color:var(--pp-ink); }
+.mono { font-family:var(--pp-font-mono); font-size:13px; }
+#status { font-size:13px; font-weight:500; }
+#log { margin-top:6px; max-height:132px; overflow:auto; font-family:var(--pp-font-mono); font-size:11px; line-height:1.55; color:var(--pp-ink-sub); background:var(--pp-bg-card-sub); border-radius:var(--pp-radius-control); padding:8px 10px; }
+.log-line.warn { color:var(--pp-state-review); }
+.log-line.err { color:var(--pp-accent); }
+.note { font-size:12px; color:var(--pp-ink-sub); line-height:1.6; margin:0; }
+.note a { color:inherit; }
+
+.real-only { display:none; }
+body.real .real-only { display:block; }
+.ctl { font:inherit; font-size:13px; color:var(--pp-ink); background:var(--pp-bg-card-sub); border:.5px solid var(--pp-line-strong); border-radius:var(--pp-radius-control); padding:4px 8px; }
+body.real .lbl .tx { background:rgba(255,255,255,.92); }
+.legend { display:grid; gap:4px; font-size:12px; color:var(--pp-ink-sub); }
+.legend i { display:inline-block; width:18px; height:10px; vertical-align:-1px; margin-right:6px; border:.5px solid var(--pp-line-strong); }
+
+#info { position:fixed; right:16px; top:16px; width:280px; background:var(--pp-bg-card); border:.5px solid var(--pp-line-strong); border-radius:var(--pp-radius-card); padding:16px 18px; }
+#info .info-h { font-size:16px; font-weight:500; margin-bottom:6px; }
+#info table { width:100%; border-collapse:collapse; font-size:13px; }
+#info th { text-align:left; font-weight:400; color:var(--pp-ink-sub); padding:4px 0; border-top:.5px solid var(--pp-line); width:48%; }
+#info td { padding:4px 0; border-top:.5px solid var(--pp-line); }
+
+.hud { position:fixed; right:16px; bottom:16px; display:flex; align-items:center; gap:12px; background:var(--pp-bg-card); border:.5px solid var(--pp-line-strong); border-radius:var(--pp-radius-card); padding:8px 12px 8px 8px; }
+#compass { width:40px; height:40px; border-radius:50%; border:.5px solid var(--pp-line-strong); position:relative; background:var(--pp-bg-card-sub); }
+#compass-needle { position:absolute; inset:0; }
+#cursor { font-family:var(--pp-font-mono); font-size:12px; color:var(--pp-ink-sub); min-width:250px; }
+#toggle-panel { position:fixed; left:16px; bottom:16px; }
+.tools { position:fixed; left:calc(50% + 158px); top:16px; transform:translateX(-50%); z-index:5; display:flex; gap:4px; background:var(--pp-bg-card); border:.5px solid var(--pp-line-strong); border-radius:var(--pp-radius-card); padding:6px; }
+.tools button { display:flex; align-items:center; gap:6px; padding:6px 10px; }
+.tools button svg { width:18px; height:18px; flex:none; }
+.tools kbd { font-family:var(--pp-font-mono); font-size:11px; color:var(--pp-ink-hint); }
+.tools button.on kbd { color:#C3BFB6; }
+body[data-tool=pan] #c { cursor:grab; }
+body[data-tool=pan].dragging #c { cursor:grabbing; }
+body[data-tool=orbit].dragging #c { cursor:move; }
+.tip{display:none}
+@media (max-width:1000px) { .tools { left:332px; transform:none; } }
+
+@media (max-width:640px) {
+  .tools { top:auto; bottom:72px; left:50%; transform:translateX(-50%); } .tools kbd { display:none; }
+  .panel { width:auto; right:16px; max-height:55%; }
+  #info { left:16px; right:16px; width:auto; top:auto; bottom:80px; }
+  #cursor { min-width:0; font-size:11px; }
+  .hud { left:16px; right:16px; }
+}
+</style>
+</head>
+<body>
+<canvas id="c" tabindex="0"></canvas>
+<div id="labels"></div>
+
+<aside class="panel">
+  <h1>豐原區 3D 地形模型</h1>
+  <p class="sub">Fengyuan District, Taichung — Terrain &amp; Urban Massing <span class="mono" style="font-size:11px">v1.6</span></p>
+
+  <div class="sec">
+    <div class="stats">
+      <div class="stat"><div class="k">行政區面積 Area</div><div class="v" id="st-area">—</div></div>
+      <div class="stat"><div class="k">範圍 Extent</div><div class="v" id="st-ext">—</div></div>
+      <div class="stat"><div class="k">區內高程 Elevation</div><div class="v" id="st-h">—</div></div>
+      <div class="stat"><div class="k">道路段數 Roads</div><div class="v" id="st-road">—</div></div>
+      <div class="stat"><div class="k">建物棟數 Buildings</div><div class="v" id="st-bldg">—</div></div>
+      <div class="stat"><div class="k">高度推估比例 Est.</div><div class="v" id="st-bldg-est">—</div></div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <h2>視角 VIEW</h2>
+    <div class="row">
+      <button data-preset="overview">全區鳥瞰</button>
+      <button data-preset="top">正射俯視</button>
+      <button data-preset="station">車站周邊</button>
+      <button data-preset="hills">東望丘陵</button>
+      <button data-preset="river">北界河谷</button>
+      <button data-preset="eye">人視點</button>
+      <button data-preset="office">事務所</button>
+      <button data-focus5>5F 聚焦</button>
+    </div>
+    <select id="place" class="ctl" style="margin-top:10px; width:100%"><option value="">前往地點……</option></select>
+    <p class="note" style="margin-top:6px">也可以直接點畫面上的地點標籤。</p>
+  </div>
+
+  <div class="sec">
+    <h2>擬真模式 REALISTIC</h2>
+    <div class="row">
+      <button data-real="off" class="on">圖面</button>
+      <button data-real="on">擬真</button>
+    </div>
+    <div class="real-only">
+      <div class="row" style="margin-top:10px; align-items:center">
+        <input id="sun-date" type="date" class="ctl">
+        <button data-season="3-20">春分</button><button data-season="6-21">夏至</button><button data-season="9-23">秋分</button><button data-season="12-22">冬至</button>
+      </div>
+      <div class="slider" style="margin-top:10px"><input id="sun-hour" type="range" min="6" max="18.5" step="0.25" value="15"><span class="mono" id="sun-hour-val">15:00</span></div>
+      <div class="mono" id="sun-read" style="color:var(--pp-ink-sub); font-size:12px; margin-top:4px">—</div>
+      <p class="note" style="margin-top:6px">衛星影像底圖、天空、依日期時刻計算的日照陰影。人視點可用 W A S D 漫遊（Shift 加速）。</p>
+    </div>
+  </div>
+
+  <div class="sec">
+    <h2>圖層 LAYERS</h2>
+    <div class="layers">
+      <label><input type="checkbox" data-layer="terrain">地形</label>
+      <label><input type="checkbox" data-layer="buildings">建物量體</label>
+      <label><input type="checkbox" data-layer="roads">道路</label>
+      <label><input type="checkbox" data-layer="rail">鐵路</label>
+      <label><input type="checkbox" data-layer="water">水系</label>
+      <label><input type="checkbox" data-layer="parks">綠地</label>
+      <label><input type="checkbox" data-layer="boundary">行政界</label>
+      <label><input type="checkbox" data-layer="labels">地標</label>
+      <label><input type="checkbox" data-layer="villages">舊地名</label>
+    </div>
+  </div>
+
+  <div class="sec">
+    <h2>垂直誇張 VERTICAL EXAGGERATION</h2>
+    <div class="slider"><input id="ex" type="range" min="1" max="4" step="0.5" value="1"><span class="mono" id="ex-val">1.0×</span></div>
+  </div>
+
+  <div class="sec">
+    <h2>建物 BUILDINGS</h2>
+    <p class="note">載入 OSM 於豐原區界內所有建物輪廓，點選量體可查看高度與來源。OSM 在本區的建物圖資覆蓋不完整，空白街廓不代表無建物。</p>
+  </div>
+
+  <div class="sec">
+    <h2>操作 CONTROLS</h2>
+    <p class="note">環繞模式：左鍵拖曳環繞，右鍵拖曳平移。<br>平移模式（手掌）：左鍵拖曳平移。<br>中鍵拖曳環繞，Shift＋中鍵平移；按住空白鍵暫時切換成手掌；滾輪以游標處為中心縮放。<br>W A S D 水平移動（Shift 加速）。</p>
+  </div>
+
+  <div class="sec">
+    <h2>圖例 LEGEND</h2>
+    <div class="legend">
+      <div><i style="background:#FBFAF7"></i>建物（OSM 有高度或樓層標籤）</div>
+      <div><i style="background:#F1EEE8"></i>建物（高度推估）</div>
+      <div><i style="background:#9C3D2C"></i>初樸建築師事務所 5F（細化模型）</div>
+      <div><i style="background:#9DB0B6"></i>水域／河道</div>
+      <div><i style="background:#E2E6D8"></i>公園綠地</div>
+      <div><i style="background:repeating-linear-gradient(90deg,#55524C 0 6px,#fff 6px 12px)"></i>鐵路</div>
+      <div><i style="background:#fff;border:none;border-top:2px dashed #232220;height:2px"></i>豐原區行政界</div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <h2>狀態 STATUS</h2>
+    <div id="status">初始化……</div>
+    <div id="log"></div>
+    <div class="row" style="margin-top:10px">
+      <button id="shot">輸出 PNG</button>
+      <button id="reload">重新下載地形</button>
+    </div>
+  </div>
+
+  <div class="sec">
+    <p class="note">資料來源：道路、建物、水系、行政界 © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>（ODbL），經 Overpass API 擷取後內嵌於本檔（擷取日期見狀態紀錄）；擬真模式衛星影像 © Esri, Maxar, Earthstar Geographics（執行期下載）；地形 AWS Terrain Tiles（Terrarium，z13 約 17 m/px，台灣區以 SRTM 等資料為主）。建物高度多數為依類型推估，非實測；本模型供基地初步判讀，不可作為測量、設計或法規依據。</p>
+  </div>
+</aside>
+
+<button id="toggle-panel">面板</button>
+<div id="info" hidden></div>
+<div class="tools" role="toolbar" aria-label="檢視工具">
+  <button data-tool="orbit" title="環繞 Orbit（O）"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="9" ry="4.5"/><path d="M12 3v18"/><path d="M18.5 8.2l2.3-.6-.4 2.4"/></svg>環繞<kbd>O</kbd></button>
+  <button data-tool="pan" title="平移 Pan（H，或按住空白鍵）"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 11V5.5a1.5 1.5 0 0 1 3 0V11"/><path d="M11 10.5V4a1.5 1.5 0 0 1 3 0v6.5"/><path d="M14 10.5V5.5a1.5 1.5 0 0 1 3 0V13"/><path d="M8 11V9a1.5 1.5 0 0 0-3 0v5.5c0 3.6 2.9 6.5 6.5 6.5h1c3 0 5.5-2.5 5.5-5.5V11a1.5 1.5 0 0 1 3 0"/></svg>平移<kbd>H</kbd></button>
+  <button data-tool="extents" title="全圖 Zoom Extents（Shift+Z）"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/><rect x="9" y="9" width="6" height="6"/></svg>全圖<kbd>⇧Z</kbd></button>
+</div>
+<div class="hud">
+  <div id="compass"><svg id="compass-needle" viewBox="0 0 40 40"><polygon points="20,5 24,20 16,20" fill="#232220"/><polygon points="20,35 24,20 16,20" fill="#C3BFB6"/><text x="20" y="4.2" font-size="5" text-anchor="middle" fill="#6E6B64" font-family="Inter">N</text></svg></div>
+  <div id="cursor">—</div>
+</div>
+
+<script>window.__PACK_B64="/*__PACK__*/";</script>
+<script>/*__BUNDLE__*/</script>
+</body>
+</html>
