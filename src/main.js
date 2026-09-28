@@ -180,7 +180,9 @@ const S = {
 /* ---------- Three.js scene ---------- */
 const canvas = $('#c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+const TOUCH = window.matchMedia('(pointer: coarse)').matches;
+const SMALL = () => window.matchMedia('(max-width: 900px)').matches;
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, TOUCH ? 1.5 : 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -224,7 +226,7 @@ const sun = new THREE.DirectionalLight(0xffffff, 1.6);
 sun.position.set(-6000, 9000, -4000); // 西北方光源，地形判讀慣例
 scene.add(sun);
 scene.add(sun.target);
-sun.shadow.mapSize.set(4096, 4096);
+sun.shadow.mapSize.set(TOUCH ? 2048 : 4096, TOUCH ? 2048 : 4096);
 sun.shadow.bias = -0.0004;
 sun.shadow.normalBias = 1.5;
 
@@ -240,6 +242,8 @@ function resize() {
   camera.updateProjectionMatrix();
 }
 window.addEventListener('resize', resize);
+if (window.visualViewport) window.visualViewport.addEventListener('resize', resize);
+window.addEventListener('orientationchange', () => setTimeout(resize, 300));
 
 /* ---------- DEM ---------- */
 function lonToPx(lon, z) { return (lon + 180) / 360 * 256 * 2 ** z; }
@@ -873,9 +877,10 @@ function updateLabels() {
     o.v.set(o.l.x, y, o.l.z).project(camera);
     const sx = (o.v.x * 0.5 + 0.5) * w, sy = (-o.v.y * 0.5 + 0.5) * h;
     const off = o.v.z > 1 || sx < -50 || sx > w + 50 || sy < -20 || sy > h + 20;
-    const tooFar = (o.l.kind === 'village' && camDist > 9000) || (o.l.pri >= 5 && camDist > 14000);
+    const small = w < 700;
+    const tooFar = (o.l.kind === 'village' && camDist > (small ? 5000 : 9000)) || (o.l.pri >= 5 && camDist > (small ? 7000 : 14000)) || (small && o.l.pri >= 4 && camDist > 12000);
     let clash = false;
-    if (!off && !tooFar) for (const p of placed) if (Math.abs(p[0] - sx) < 70 && Math.abs(p[1] - sy) < 18) { clash = true; break; }
+    if (!off && !tooFar) for (const p of placed) if (Math.abs(p[0] - sx) < (w < 700 ? 90 : 70) && Math.abs(p[1] - sy) < (w < 700 ? 24 : 18)) { clash = true; break; }
     if (off || tooFar || clash) { o.el.style.display = 'none'; continue; }
     placed.push([sx, sy]);
     o.el.style.display = 'flex';
@@ -922,8 +927,23 @@ canvas.addEventListener('pointermove', (e) => {
 });
 let downAt = null;
 canvas.addEventListener('pointerdown', (e) => { downAt = [e.clientX, e.clientY]; });
+let lastTap = { t: 0, x: 0, y: 0 };
 canvas.addEventListener('pointerup', (e) => {
-  if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 4) return;
+  if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > (e.pointerType === 'touch' ? 10 : 4)) return;
+  // 雙擊（雙點）拉近至該點
+  const now = performance.now();
+  if (now - lastTap.t < 320 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 30 && S.hf) {
+    lastTap.t = 0;
+    const hit = terrainHit(e.clientX, e.clientY);
+    if (hit) {
+      const T = new THREE.Vector3(hit.x, hit.h * S.ex, hit.z);
+      const off = new THREE.Vector3().subVectors(camera.position, controls.target).multiplyScalar(0.45);
+      if (off.length() < 80) off.setLength(80);
+      flyTo(T, T.clone().add(off), 700, false);
+    }
+    return;
+  }
+  lastTap = { t: now, x: e.clientX, y: e.clientY };
   const info = $('#info');
   if (!bldgMesh || !bldgMesh.visible) return;
   const r = canvas.getBoundingClientRect();
@@ -938,7 +958,7 @@ canvas.addEventListener('pointerup', (e) => {
   const t = b.tags;
   const area = Math.abs(ringArea(b.ring));
   info.hidden = false;
-  info.innerHTML = `
+  info.innerHTML = `<button class="info-x" aria-label="關閉" onclick="this.parentNode.hidden=true">×</button>
     <div class="info-h">${t.name || t['name:zh'] || '未命名建物'}</div>
     <table>
       <tr><th>類型 Type</th><td>${t.building === 'yes' ? '未分類' : t.building}</td></tr>
@@ -953,7 +973,9 @@ canvas.addEventListener('pointerup', (e) => {
 
 /* ---------- Camera presets ---------- */
 let tween = null;
-function flyTo(target, pos, ms = 1400) {
+function flyTo(target, pos, ms = 1400, fit = true) {
+  // 直式螢幕水平視野較窄，依長寬比拉遠，讓主體完整入鏡
+  if (fit && camera.aspect < 1.2) pos = target.clone().add(pos.clone().sub(target).multiplyScalar(Math.min(1.7, Math.pow(1.2 / camera.aspect, 0.7))));
   const t0 = performance.now();
   const fromT = controls.target.clone(), fromP = camera.position.clone();
   tween = (now) => {
@@ -1057,7 +1079,7 @@ async function loadSatellite() {
   const { minX, maxX, minZ, maxZ } = S.ext;
   const z = 16;
   const W = maxX - minX, H = maxZ - minZ;
-  const maxTex = Math.min(renderer.capabilities.maxTextureSize, 8192);
+  const maxTex = Math.min(renderer.capabilities.maxTextureSize, TOUCH ? 4096 : 8192); // 行動裝置記憶體較小
   const ppm = Math.min(maxTex / Math.max(W, H), 1 / 1.1);
   const cw = Math.round(W * ppm), ch = Math.round(H * ppm);
   const cvs = document.createElement('canvas'); cvs.width = cw; cvs.height = ch;
@@ -1295,6 +1317,13 @@ async function main() {
 }
 
 /* ---------- Controls wiring ---------- */
+// 手機／平板直式：面板改為底部抽屜
+if (SMALL()) document.body.classList.add('sheet-min');
+document.querySelector('.sheet-head').addEventListener('click', () => { if (SMALL()) document.body.classList.toggle('sheet-min'); });
+const collapseSheet = () => { if (SMALL()) document.body.classList.add('sheet-min'); };
+document.querySelectorAll('[data-preset],[data-focus5]').forEach((b) => b.addEventListener('click', collapseSheet));
+document.querySelector('#place').addEventListener('change', collapseSheet);
+document.body.classList.toggle('touch', TOUCH);
 S.focus5 = false;
 function setFocus5(on) {
   S.focus5 = on;

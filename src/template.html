@@ -2,7 +2,9 @@
 <html lang="zh-Hant-TW">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#ECEAE5">
 <title>豐原區 3D 地形模型</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&family=Noto+Sans+TC:wght@400;500&display=swap" rel="stylesheet">
@@ -90,14 +92,58 @@ body[data-tool=pan] #c { cursor:grab; }
 body[data-tool=pan].dragging #c { cursor:grabbing; }
 body[data-tool=orbit].dragging #c { cursor:move; }
 .tip{display:none}
-@media (max-width:1000px) { .tools { left:332px; transform:none; } }
+@media (min-width:901px) and (max-width:1000px) { .tools { left:332px; transform:none; } }
 
-@media (max-width:640px) {
-  .tools { top:auto; bottom:72px; left:50%; transform:translateX(-50%); } .tools kbd { display:none; }
-  .panel { width:auto; right:16px; max-height:55%; }
-  #info { left:16px; right:16px; width:auto; top:auto; bottom:80px; }
-  #cursor { min-width:0; font-size:11px; }
-  .hud { left:16px; right:16px; }
+
+/* ---------- 觸控與小螢幕 ---------- */
+html { -webkit-text-size-adjust:100%; }
+body { overscroll-behavior:none; -webkit-tap-highlight-color:transparent; }
+#c { touch-action:none; }
+.panel, #info { overscroll-behavior:contain; -webkit-overflow-scrolling:touch; }
+button, select, input, .lbl { touch-action:manipulation; }
+.sheet-grip { display:none; }
+.touch-only { display:none; }
+body.touch .touch-only { display:block; }
+body.touch .mouse-only { display:none; }
+.info-x { position:absolute; top:8px; right:8px; width:32px; height:32px; padding:0; font-size:18px; line-height:1; background:none; border:none; color:var(--pp-ink-sub); }
+#info { position:fixed; }
+@media (pointer:coarse) {
+  button { padding:8px 12px; min-height:38px; }
+  .ctl { min-height:38px; font-size:15px; }
+  input[type=checkbox] { width:18px; height:18px; }
+  .layers { gap:8px 10px; font-size:15px; }
+  .lbl .tx { padding:6px 9px; font-size:13px; }
+  .lbl .dot { width:11px; height:11px; }
+  .tools kbd { display:none; }
+  #cursor { display:none; }
+  .hud { padding:6px; }
+  input[type=range] { height:28px; }
+}
+@media (max-width:900px) {
+  .panel { top:auto; left:0; right:0; bottom:0; width:auto; max-height:min(78dvh, 78vh); border-radius:16px 16px 0 0; border-bottom:none; padding:6px 16px calc(16px + env(safe-area-inset-bottom)); z-index:6; }
+  .sheet-head { cursor:pointer; padding-top:4px; }
+  .sheet-grip { display:block; width:40px; height:4px; border-radius:2px; background:var(--pp-line-strong); margin:4px auto 10px; }
+  .panel h1 { font-size:17px; }
+  body.sheet-min .panel { overflow:hidden; }
+  body.sheet-min .panel .sub,
+  body.sheet-min .panel .sec:not(.sec-view),
+  body.sheet-min .panel #place,
+  body.sheet-min .panel .pick-note,
+  body.sheet-min .panel .sec-view h2 { display:none; }
+  body.sheet-min .panel .sec-view { border-top:none; margin-top:8px; padding-top:0; }
+  body.sheet-min .panel .sec-view .row { flex-wrap:nowrap; overflow-x:auto; scrollbar-width:none; margin:0 -16px; padding:0 16px 2px; }
+  body.sheet-min .panel .sec-view .row::-webkit-scrollbar { display:none; }
+  body.sheet-min .panel .sec-view button { flex:none; }
+  #toggle-panel { display:none; }
+  .tools { top:calc(10px + env(safe-area-inset-top)); left:50%; transform:translateX(-50%); bottom:auto; padding:4px; }
+  .hud { top:calc(10px + env(safe-area-inset-top)); right:calc(10px + env(safe-area-inset-right)); bottom:auto; left:auto; padding:4px; }
+  #compass { width:36px; height:36px; }
+  #cursor { display:none; }
+  #info { left:10px; right:10px; width:auto; top:calc(62px + env(safe-area-inset-top)); bottom:auto; max-height:45dvh; overflow:auto; z-index:7; padding:14px 16px; }
+}
+@media (max-width:520px) {
+  .tools button { font-size:0; gap:0; padding:8px 10px; }
+  .tools button svg { width:20px; height:20px; }
 }
 </style>
 </head>
@@ -106,8 +152,11 @@ body[data-tool=orbit].dragging #c { cursor:move; }
 <div id="labels"></div>
 
 <aside class="panel">
-  <h1>豐原區 3D 地形模型</h1>
-  <p class="sub">Fengyuan District, Taichung — Terrain &amp; Urban Massing <span class="mono" style="font-size:11px">v1.8</span></p>
+  <div class="sheet-head">
+    <div class="sheet-grip" aria-hidden="true"></div>
+    <h1>豐原區 3D 地形模型</h1>
+    <p class="sub">Fengyuan District, Taichung — Terrain &amp; Urban Massing <span class="mono" style="font-size:11px">v1.9</span></p>
+  </div>
 
   <div class="sec">
     <div class="stats">
@@ -120,7 +169,7 @@ body[data-tool=orbit].dragging #c { cursor:move; }
     </div>
   </div>
 
-  <div class="sec">
+  <div class="sec sec-view">
     <h2>視角 VIEW</h2>
     <div class="row">
       <button data-preset="overview">全區鳥瞰</button>
@@ -131,7 +180,7 @@ body[data-tool=orbit].dragging #c { cursor:move; }
       <button data-focus5 title="五樓聚焦：其他樓層半透明，顯示初樸所在的 5F 空間；再按一次恢復">初樸</button>
     </div>
     <select id="place" class="ctl" style="margin-top:10px; width:100%"><option value="">前往地點……</option></select>
-    <p class="note" style="margin-top:6px">也可以直接點畫面上的地點標籤。</p>
+    <p class="note pick-note" style="margin-top:6px">也可以直接點畫面上的地點標籤。</p>
   </div>
 
   <div class="sec">
@@ -178,7 +227,8 @@ body[data-tool=orbit].dragging #c { cursor:move; }
 
   <div class="sec">
     <h2>操作 CONTROLS</h2>
-    <p class="note">環繞模式：左鍵拖曳環繞，右鍵拖曳平移。<br>平移模式（手掌）：左鍵拖曳平移。<br>中鍵拖曳環繞，Shift＋中鍵平移；按住空白鍵暫時切換成手掌；滾輪以游標處為中心縮放。<br>W A S D 水平移動（Shift 加速）。</p>
+    <p class="note touch-only">單指拖曳環繞（切到手掌時為平移）；雙指捏合縮放、雙指拖曳平移；雙點畫面拉近；點建物看資訊、點標籤前往。</p>
+    <p class="note mouse-only">環繞模式：左鍵拖曳環繞，右鍵拖曳平移。<br>平移模式（手掌）：左鍵拖曳平移。<br>中鍵拖曳環繞，Shift＋中鍵平移；按住空白鍵暫時切換成手掌；滾輪以游標處為中心縮放。<br>W A S D 水平移動（Shift 加速）。</p>
   </div>
 
   <div class="sec">
