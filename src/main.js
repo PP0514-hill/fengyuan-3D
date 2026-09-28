@@ -824,7 +824,7 @@ const FOCUS_RANGE = { office: 0, station: 650, temple: 220, gov: 300, sport: 420
 const FOCUS_PITCH = { peak: 32, river: 48 }; // 俯角（度），未列者 42°
 function focusLandmark(l) {
   if (!S.hf) return;
-  if (l.kind === 'office') { preset('office'); return; }
+  if (l.kind === 'office') { setFocus5(true); return; }
   const dist = FOCUS_RANGE[l.kind] ?? 500;
   const pitch = (FOCUS_PITCH[l.kind] ?? 42) * Math.PI / 180;
   const gy = heightAt(l.x, l.z) * S.ex;

@@ -107,7 +107,7 @@ body[data-tool=orbit].dragging #c { cursor:move; }
 
 <aside class="panel">
   <h1>豐原區 3D 地形模型</h1>
-  <p class="sub">Fengyuan District, Taichung — Terrain &amp; Urban Massing <span class="mono" style="font-size:11px">v1.6</span></p>
+  <p class="sub">Fengyuan District, Taichung — Terrain &amp; Urban Massing <span class="mono" style="font-size:11px">v1.7</span></p>
 
   <div class="sec">
     <div class="stats">
@@ -128,9 +128,7 @@ body[data-tool=orbit].dragging #c { cursor:move; }
       <button data-preset="station">車站周邊</button>
       <button data-preset="hills">東望丘陵</button>
       <button data-preset="river">北界河谷</button>
-      <button data-preset="eye">人視點</button>
-      <button data-preset="office">事務所</button>
-      <button data-focus5>5F 聚焦</button>
+      <button data-focus5 title="五樓聚焦：其他樓層半透明，顯示初樸所在的 5F 空間；再按一次恢復">初樸</button>
     </div>
     <select id="place" class="ctl" style="margin-top:10px; width:100%"><option value="">前往地點……</option></select>
     <p class="note" style="margin-top:6px">也可以直接點畫面上的地點標籤。</p>
@@ -149,7 +147,7 @@ body[data-tool=orbit].dragging #c { cursor:move; }
       </div>
       <div class="slider" style="margin-top:10px"><input id="sun-hour" type="range" min="6" max="18.5" step="0.25" value="15"><span class="mono" id="sun-hour-val">15:00</span></div>
       <div class="mono" id="sun-read" style="color:var(--pp-ink-sub); font-size:12px; margin-top:4px">—</div>
-      <p class="note" style="margin-top:6px">衛星影像底圖、天空、依日期時刻計算的日照陰影。人視點可用 W A S D 漫遊（Shift 加速）。</p>
+      <p class="note" style="margin-top:6px">衛星影像底圖、天空、依日期時刻計算的日照陰影。</p>
     </div>
   </div>
 
